@@ -71,7 +71,7 @@ extern "C" {
 
 // prevent depreciated warnings for >ffmpeg-1.2.x and >libav-9.x
 #if LIBAVCODEC_VERSION_MAJOR > 54
-#  undef FF_API_REQUEST_CHANNELS
+#  undef AV_API_REQUEST_CHANNELS
 #endif
 }
 
@@ -147,7 +147,7 @@ public:
 
 	unsigned int GetFreeSpace(void)
 	{
-		return AVPKT_BUFFER_SIZE - m_size - FF_INPUT_BUFFER_PADDING_SIZE;
+		return AVPKT_BUFFER_SIZE - m_size - AV_INPUT_BUFFER_PADDING_SIZE;
 	}
 
 	bool Empty(void)
@@ -182,7 +182,7 @@ public:
 		m_packet.size = 0;
 		m_size = 0;
 		m_parsed = true; // parser is empty, no need for parsing
-		memset(m_packet.data, 0, FF_INPUT_BUFFER_PADDING_SIZE);
+		memset(m_packet.data, 0, AV_INPUT_BUFFER_PADDING_SIZE);
 
 		while (!m_ptsQueue.empty())
 		{
@@ -197,13 +197,13 @@ public:
 		m_mutex->Lock();
 		bool ret = true;
 
-		if (m_size + length + FF_INPUT_BUFFER_PADDING_SIZE > AVPKT_BUFFER_SIZE)
+		if (m_size + length + AV_INPUT_BUFFER_PADDING_SIZE > AVPKT_BUFFER_SIZE)
 			ret = false;
 		else
 		{
 			memcpy(m_packet.data + m_size, data, length);
 			m_size += length;
-			memset(m_packet.data + m_size, 0, FF_INPUT_BUFFER_PADDING_SIZE);
+			memset(m_packet.data + m_size, 0, AV_INPUT_BUFFER_PADDING_SIZE);
 
 			Pts* entry = new Pts(pts, length);
 			m_ptsQueue.push(entry);
@@ -222,7 +222,7 @@ public:
 		{
 			memmove(m_packet.data, m_packet.data + length, m_size - length);
 			m_size -= length;
-			memset(m_packet.data + m_size, 0, FF_INPUT_BUFFER_PADDING_SIZE);
+			memset(m_packet.data + m_size, 0, AV_INPUT_BUFFER_PADDING_SIZE);
 
 			while (!m_ptsQueue.empty() && length)
 			{
@@ -1359,7 +1359,7 @@ void cRpiAudioDecoder::Action(void)
 						m_parser->GetFrameSize());
 
 #ifndef DO_RESAMPLE
-#if FF_API_REQUEST_CHANNELS
+#if AV_API_REQUEST_CHANNELS
 				// if there's no libswresample, let decoder do the down mix
 				m_codecs[codec].context->request_channels =
 						m_render->GetChannels();
