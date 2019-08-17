@@ -243,6 +243,7 @@ OMX_ERRORTYPE OMX_APIENTRY OMX_SetupTunnel(
    OMX_COMPONENTTYPE *pCompIn, *pCompOut;
    OMX_TUNNELSETUPTYPE oTunnelSetup;
 
+   fprintf(stderr, "OMX_SetupTunnel(%p, %u, %p, %u)\n", hOutput, nPortOutput, hInput, nPortInput);
    if ((hOutput == NULL && hInput == NULL) || ilcs_service == NULL)
       return OMX_ErrorBadParameter;
 
@@ -264,6 +265,7 @@ OMX_ERRORTYPE OMX_APIENTRY OMX_SetupTunnel(
          pCompOut->ComponentTunnelRequest(hOutput, nPortOutput, NULL, 0, NULL);
       }
    }
+   fprintf(stderr, "OMX_SetupTunnel: %i\n", eError);
    return eError;
 }
 

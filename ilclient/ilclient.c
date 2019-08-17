@@ -46,6 +46,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <string.h>
 #include <ctype.h>
 #include <assert.h>
+#include <sys/syscall.h>
 
 #include "interface/vcos/vcos.h"
 #include "interface/vcos/vcos_logging.h"
@@ -53,12 +54,14 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "IL/OMX_Broadcom.h"
 #include "ilclient.h"
+#include "OMXAlsa.h"
 
 #define VCOS_LOG_CATEGORY (&ilclient_log_category)
 
 #ifndef ILCLIENT_THREAD_DEFAULT_STACK_SIZE
 #define ILCLIENT_THREAD_DEFAULT_STACK_SIZE   (6<<10)
 #endif
+
 
 static VCOS_LOG_CAT_T ilclient_log_category;
 
@@ -105,7 +108,7 @@ struct _COMPONENT_T {
    char name[32];
    char bufname[32];
    unsigned int error_mask;
-   unsigned int private;
+   unsigned int private_;
    ILEVENT_T *list;
    ILCLIENT_T *client;
 };
@@ -143,6 +146,17 @@ static OMX_ERRORTYPE ilclient_event_handler(OMX_IN OMX_HANDLETYPE hComponent,
       OMX_IN OMX_PTR pEventData);
 static void ilclient_lock_events(ILCLIENT_T *st);
 static void ilclient_unlock_events(ILCLIENT_T *st);
+
+static OMX_ERRORTYPE ilclient_send_command(
+	OMX_IN  COMPONENT_T* hComponent,
+	OMX_IN  OMX_COMMANDTYPE Cmd,
+	OMX_IN  OMX_U32 nParam1,
+	OMX_IN  OMX_PTR pCmdData)
+{	ilclient_debug_output("ilclient_send_command(%p{%p,%s}, %d, %u, %p)",
+		hComponent, hComponent->comp, hComponent->name, Cmd, nParam1, pCmdData);
+	return ((OMX_COMPONENTTYPE*)(hComponent->comp))->SendCommand(
+		hComponent->comp, Cmd, nParam1, pCmdData);
+}
 
 /******************************************************************************
 Global functions
@@ -292,13 +306,14 @@ void ilclient_set_configchanged_callback(ILCLIENT_T *st, ILCLIENT_CALLBACK_T fun
  *
  * Returns: 0 on success, -1 on failure
  ***********************************************************/
-int ilclient_create_component(ILCLIENT_T *client, COMPONENT_T **comp, char *name,
+int ilclient_create_component(ILCLIENT_T *client, COMPONENT_T **comp, const char *name,
                               ILCLIENT_CREATE_FLAGS_T flags)
 {
    OMX_CALLBACKTYPE callbacks;
    OMX_ERRORTYPE error;
    char component_name[128];
    int32_t status;
+   ilclient_debug_output("ilclient_create_component(%p, , %s, %x)", client, name, flags);
 
    *comp = vcos_malloc(sizeof(COMPONENT_T), "il:comp");
    if(!*comp)
@@ -316,7 +331,6 @@ int ilclient_create_component(ILCLIENT_T *client, COMPONENT_T **comp, char *name
 
    vcos_snprintf((*comp)->name, sizeof((*comp)->name), "cl:%s", name);
    vcos_snprintf((*comp)->bufname, sizeof((*comp)->bufname), "cl:%s buffer", name);
-   vcos_snprintf(component_name, sizeof(component_name), "%s%s", COMP_PREFIX, name);
 
    (*comp)->flags = flags;
 
@@ -324,8 +338,13 @@ int ilclient_create_component(ILCLIENT_T *client, COMPONENT_T **comp, char *name
    callbacks.EmptyBufferDone = (flags & ILCLIENT_ENABLE_INPUT_BUFFERS) ? ilclient_empty_buffer_done : ilclient_empty_buffer_done_error;
    callbacks.FillBufferDone = (flags & ILCLIENT_ENABLE_OUTPUT_BUFFERS) ? ilclient_fill_buffer_done : ilclient_fill_buffer_done_error;
 
-   error = OMX_GetHandle(&(*comp)->comp, component_name, *comp, &callbacks);
-
+   if (strncmp(name, "OMX.alsa.", 9) == 0)
+      error = OMXALSA_GetHandle(&(*comp)->comp, name, *comp, &callbacks);
+   else
+   {  vcos_snprintf(component_name, sizeof(component_name), "%s%s", COMP_PREFIX, name);
+      error = OMX_GetHandle(&(*comp)->comp, component_name, *comp, &callbacks);
+   }
+   ilclient_debug_output("ilclient_create_component: %x", error);
    if (error == OMX_ErrorNone)
    {
       OMX_UUIDTYPE uid;
@@ -334,11 +353,9 @@ int ilclient_create_component(ILCLIENT_T *client, COMPONENT_T **comp, char *name
 
       if(OMX_GetComponentVersion((*comp)->comp, name, &compVersion, &specVersion, &uid) == OMX_ErrorNone)
       {
-         char *p = (char *) uid + strlen(COMP_PREFIX);
-
-         vcos_snprintf((*comp)->name, sizeof((*comp)->name), "cl:%s", p);
+         vcos_snprintf((*comp)->name, sizeof((*comp)->name), "cl:%s", uid+4);
          (*comp)->name[sizeof((*comp)->name)-1] = 0;
-         vcos_snprintf((*comp)->bufname, sizeof((*comp)->bufname), "cl:%s buffer", p);
+         vcos_snprintf((*comp)->bufname, sizeof((*comp)->bufname), "cl:%s buffer", uid+4);
          (*comp)->bufname[sizeof((*comp)->bufname)-1] = 0;
       }
 
@@ -466,6 +483,7 @@ void ilclient_state_transition(COMPONENT_T *list[], OMX_STATETYPE state)
    num=0;
    while (list[num])
       num++;
+   ilclient_debug_output("ilclient_state_transition(%p[%i], %u)", list, num, state);
 
    // if we transition the supplier port first, it will call freebuffer on the non
    // supplier, which will correctly signal a port unpopulated error.  We want to
@@ -474,23 +492,23 @@ void ilclient_state_transition(COMPONENT_T *list[], OMX_STATETYPE state)
       for (i=0; i<num; i++)
          list[i]->error_mask |= ILCLIENT_ERROR_UNPOPULATED;
    for (i=0; i<num; i++)
-      list[i]->private = ((rand() >> 13) & 0xff)+1;
+      list[i]->private_ = ((rand() >> 13) & 0xff)+1;
 
    for (i=0; i<num; i++)
    {
       // transition the components in a random order
       int j, min = -1;
       for (j=0; j<num; j++)
-         if (list[j]->private && (min == -1 || list[min]->private > list[j]->private))
+         if (list[j]->private_ && (min == -1 || list[min]->private_ > list[j]->private_))
             min = j;
 
-      list[min]->private = 0;
+      list[min]->private_ = 0;
 
       random_wait();
       //Clear error event for this component
       vcos_event_flags_get(&list[min]->event, ILCLIENT_EVENT_ERROR, VCOS_OR_CONSUME, 0, &set);
 
-      error = OMX_SendCommand(list[min]->comp, OMX_CommandStateSet, state, NULL);
+      error = ilclient_send_command(list[min], OMX_CommandStateSet, state, NULL);
       vc_assert(error == OMX_ErrorNone);
    }
 
@@ -547,10 +565,10 @@ void ilclient_disable_tunnel(TUNNEL_T *tunnel)
    tunnel->source->error_mask |= ILCLIENT_ERROR_UNPOPULATED;
    tunnel->sink->error_mask |= ILCLIENT_ERROR_UNPOPULATED;
 
-   error = OMX_SendCommand(tunnel->source->comp, OMX_CommandPortDisable, tunnel->source_port, NULL);
+   error = ilclient_send_command(tunnel->source, OMX_CommandPortDisable, tunnel->source_port, NULL);
    vc_assert(error == OMX_ErrorNone);
 
-   error = OMX_SendCommand(tunnel->sink->comp, OMX_CommandPortDisable, tunnel->sink_port, NULL);
+   error = ilclient_send_command(tunnel->sink, OMX_CommandPortDisable, tunnel->sink_port, NULL);
    vc_assert(error == OMX_ErrorNone);
 
    if(ilclient_wait_for_command_complete(tunnel->source, OMX_CommandPortDisable, tunnel->source_port) < 0)
@@ -579,10 +597,10 @@ int ilclient_enable_tunnel(TUNNEL_T *tunnel)
                          tunnel->source, tunnel->source_port,
                          tunnel->sink, tunnel->sink_port);
 
-   error = OMX_SendCommand(tunnel->source->comp, OMX_CommandPortEnable, tunnel->source_port, NULL);
+   error = ilclient_send_command(tunnel->source, OMX_CommandPortEnable, tunnel->source_port, NULL);
    vc_assert(error == OMX_ErrorNone);
 
-   error = OMX_SendCommand(tunnel->sink->comp, OMX_CommandPortEnable, tunnel->sink_port, NULL);
+   error = ilclient_send_command(tunnel->sink, OMX_CommandPortEnable, tunnel->sink_port, NULL);
    vc_assert(error == OMX_ErrorNone);
 
    // to complete, the sink component can't be in loaded state
@@ -593,7 +611,7 @@ int ilclient_enable_tunnel(TUNNEL_T *tunnel)
       int ret = 0;
 
       if(ilclient_wait_for_command_complete(tunnel->sink, OMX_CommandPortEnable, tunnel->sink_port) != 0 ||
-         OMX_SendCommand(tunnel->sink->comp, OMX_CommandStateSet, OMX_StateIdle, NULL) != OMX_ErrorNone ||
+      	ilclient_send_command(tunnel->sink, OMX_CommandStateSet, OMX_StateIdle, NULL) != OMX_ErrorNone ||
          (ret = ilclient_wait_for_command_complete_dual(tunnel->sink, OMX_CommandStateSet, OMX_StateIdle, tunnel->source)) < 0)
       {
          if(ret == -2)
@@ -651,13 +669,14 @@ void ilclient_flush_tunnels(TUNNEL_T *tunnel, int max)
    OMX_ERRORTYPE error;
    int i;
 
+   ilclient_debug_output("ilclient: ilclient_flush_tunnels({%i -> %i}, %i", tunnel->source_port, tunnel->sink_port, max);
    i=0;
    while (tunnel[i].source && (max == 0 || i < max))
    {
-      error = OMX_SendCommand(tunnel[i].source->comp, OMX_CommandFlush, tunnel[i].source_port, NULL);
+      error = ilclient_send_command(tunnel[i].source, OMX_CommandFlush, tunnel[i].source_port, NULL);
       vc_assert(error == OMX_ErrorNone);
 
-      error = OMX_SendCommand(tunnel[i].sink->comp, OMX_CommandFlush, tunnel[i].sink_port, NULL);
+      error = ilclient_send_command(tunnel[i].sink, OMX_CommandFlush, tunnel[i].sink_port, NULL);
       vc_assert(error == OMX_ErrorNone);
 
       ilclient_wait_for_event(tunnel[i].source, OMX_EventCmdComplete,
@@ -711,7 +730,10 @@ void ilclient_cleanup_components(COMPONENT_T *list[])
       ilclient_return_events(list[i]);
       if (list[i]->comp)
       {
-         error = OMX_FreeHandle(list[i]->comp);
+         if (strncmp(list[i]->name, "cl:OMX.alsa.", 12) == 0)
+            error = OMXALSA_FreeHandle(list[i]->comp);
+         else
+            error = OMX_FreeHandle(list[i]->comp);
 
          vc_assert(error == OMX_ErrorNone);
       }
@@ -743,7 +765,8 @@ void ilclient_cleanup_components(COMPONENT_T *list[])
 int ilclient_change_component_state(COMPONENT_T *comp, OMX_STATETYPE state)
 {
    OMX_ERRORTYPE error;
-   error = OMX_SendCommand(comp->comp, OMX_CommandStateSet, state, NULL);
+   ilclient_debug_output("ilclient_change_component_state(%s, %u)", comp->name, state);
+   error = ilclient_send_command(comp, OMX_CommandStateSet, state, NULL);
    vc_assert(error == OMX_ErrorNone);
    if(ilclient_wait_for_command_complete(comp, OMX_CommandStateSet, state) < 0)
    {
@@ -764,7 +787,7 @@ int ilclient_change_component_state(COMPONENT_T *comp, OMX_STATETYPE state)
 void ilclient_disable_port(COMPONENT_T *comp, int portIndex)
 {
    OMX_ERRORTYPE error;
-   error = OMX_SendCommand(comp->comp, OMX_CommandPortDisable, portIndex, NULL);
+   error = ilclient_send_command(comp, OMX_CommandPortDisable, portIndex, NULL);
    vc_assert(error == OMX_ErrorNone);
    if(ilclient_wait_for_command_complete(comp, OMX_CommandPortDisable, portIndex) < 0)
       vc_assert(0);
@@ -780,7 +803,7 @@ void ilclient_disable_port(COMPONENT_T *comp, int portIndex)
 void ilclient_enable_port(COMPONENT_T *comp, int portIndex)
 {
    OMX_ERRORTYPE error;
-   error = OMX_SendCommand(comp->comp, OMX_CommandPortEnable, portIndex, NULL);
+   error = ilclient_send_command(comp, OMX_CommandPortEnable, portIndex, NULL);
    vc_assert(error == OMX_ErrorNone);
    if(ilclient_wait_for_command_complete(comp, OMX_CommandPortEnable, portIndex) < 0)
       vc_assert(0);
@@ -798,13 +821,16 @@ void ilclient_enable_port(COMPONENT_T *comp, int portIndex)
 int ilclient_enable_port_buffers(COMPONENT_T *comp, int portIndex,
                                  ILCLIENT_MALLOC_T ilclient_malloc,
                                  ILCLIENT_FREE_T ilclient_free,
-                                 void *private)
+                                 void *private_)
 {
    OMX_ERRORTYPE error;
    OMX_PARAM_PORTDEFINITIONTYPE portdef;
    OMX_BUFFERHEADERTYPE *list = NULL, **end = &list;
    OMX_STATETYPE state;
    int i;
+
+   ilclient_debug_output("ilclient_enable_port_buffers(%s, %i, %p, %p, %p)",
+  	 comp->name, portIndex, ilclient_malloc, ilclient_free, private_);
 
    memset(&portdef, 0, sizeof(OMX_PARAM_PORTDEFINITIONTYPE));
    portdef.nSize = sizeof(OMX_PARAM_PORTDEFINITIONTYPE);
@@ -822,28 +848,28 @@ int ilclient_enable_port_buffers(COMPONENT_T *comp, int portIndex,
       return -1;
 
    // send the command
-   error = OMX_SendCommand(comp->comp, OMX_CommandPortEnable, portIndex, NULL);
+   error = ilclient_send_command(comp, OMX_CommandPortEnable, portIndex, NULL);
    vc_assert(error == OMX_ErrorNone);
 
+   ilclient_debug_output("ilclient_enable_port_buffers - %u", portdef.nBufferCountActual);
    for (i=0; i != portdef.nBufferCountActual; i++)
    {
       unsigned char *buf;
       if(ilclient_malloc)
-         buf = ilclient_malloc(private, portdef.nBufferSize, portdef.nBufferAlignment, comp->bufname);
+         buf = ilclient_malloc(private_, portdef.nBufferSize, portdef.nBufferAlignment, comp->bufname);
       else
          buf = vcos_malloc_aligned(portdef.nBufferSize, portdef.nBufferAlignment, comp->bufname);
-
+      ilclient_debug_output("ilclient_enable_port_buffers - buf = %p", buf);
       if(!buf)
          break;
 
       error = OMX_UseBuffer(comp->comp, end, portIndex, NULL, portdef.nBufferSize, buf);
       if(error != OMX_ErrorNone)
-      {
+      {	ilclient_debug_output("ilclient_enable_port_buffers - OMX_UseBuffer error %x", error);
          if(ilclient_free)
-            ilclient_free(private, buf);
+            ilclient_free(private_, buf);
          else
             vcos_free(buf);
-
          break;
       }
       end = (OMX_BUFFERHEADERTYPE **) &((*end)->pAppPrivate);
@@ -865,10 +891,11 @@ int ilclient_enable_port_buffers(COMPONENT_T *comp, int portIndex,
 
    vcos_semaphore_post(&comp->sema);
 
+   ilclient_debug_output("ilclient_enable_port_buffers - %i, %u", i, portdef.nBufferCountActual);
    if(i != portdef.nBufferCountActual ||
       ilclient_wait_for_command_complete(comp, OMX_CommandPortEnable, portIndex) < 0)
    {
-      ilclient_disable_port_buffers(comp, portIndex, NULL, ilclient_free, private);
+      ilclient_disable_port_buffers(comp, portIndex, NULL, ilclient_free, private_);
 
       // at this point the first command might have terminated with an error, which means that
       // the port is disabled before the disable_port_buffers function is called, so we're left
@@ -894,7 +921,7 @@ int ilclient_enable_port_buffers(COMPONENT_T *comp, int portIndex,
 void ilclient_disable_port_buffers(COMPONENT_T *comp, int portIndex,
                                    OMX_BUFFERHEADERTYPE *bufferList,
                                    ILCLIENT_FREE_T ilclient_free,
-                                   void *private)
+                                   void *private_)
 {
    OMX_ERRORTYPE error;
    OMX_BUFFERHEADERTYPE *list = bufferList;
@@ -915,7 +942,7 @@ void ilclient_disable_port_buffers(COMPONENT_T *comp, int portIndex,
    
    num = portdef.nBufferCountActual;
    
-   error = OMX_SendCommand(comp->comp, OMX_CommandPortDisable, portIndex, NULL);
+   error = ilclient_send_command(comp, OMX_CommandPortDisable, portIndex, NULL);
    vc_assert(error == OMX_ErrorNone);
       
    while(num > 0)
@@ -964,7 +991,7 @@ void ilclient_disable_port_buffers(COMPONENT_T *comp, int portIndex,
          vc_assert(error == OMX_ErrorNone);
          
          if(ilclient_free)
-            ilclient_free(private, buf);
+            ilclient_free(private_, buf);
          else
             vcos_free(buf);
          
@@ -985,7 +1012,7 @@ void ilclient_disable_port_buffers(COMPONENT_T *comp, int portIndex,
 
          if((set & ILCLIENT_PORT_DISABLED) && ilclient_remove_event(comp, OMX_EventCmdComplete, OMX_CommandPortDisable, 0, portIndex, 0) >= 0)
             return;
-      }            
+      }
    }
   
    if(ilclient_wait_for_command_complete(comp, OMX_CommandPortDisable, portIndex) < 0)
@@ -1017,6 +1044,8 @@ int ilclient_setup_tunnel(TUNNEL_T *tunnel, unsigned int portStream, int timeout
    OMX_STATETYPE state;
    int enable_error;
 
+   ilclient_debug_output("ilclient_setup_tunnel({%s, %i, %s, %i})",
+  		tunnel->source->name, tunnel->source_port, tunnel->sink->name, tunnel->sink_port);
    // source component must at least be idle, not loaded
    error = OMX_GetState(tunnel->source->comp, &state);
    vc_assert(error == OMX_ErrorNone);
@@ -1176,6 +1205,8 @@ int ilclient_wait_for_event(COMPONENT_T *comp, OMX_EVENTTYPE event,
  ***********************************************************/
 int ilclient_wait_for_command_complete_dual(COMPONENT_T *comp, OMX_COMMANDTYPE command, OMX_U32 nData2, COMPONENT_T *other)
 {
+	ilclient_debug_output("ilclient_wait_for_command_complete_dual(%s, %u, %u, %s)",
+		comp->name, command, nData2, other ? other->name : "NULL");
    OMX_U32 mask = ILCLIENT_EVENT_ERROR;
    int ret = 0;
 
@@ -1183,7 +1214,9 @@ int ilclient_wait_for_command_complete_dual(COMPONENT_T *comp, OMX_COMMANDTYPE c
    case OMX_CommandStateSet:    mask |= ILCLIENT_STATE_CHANGED; break;
    case OMX_CommandPortDisable: mask |= ILCLIENT_PORT_DISABLED; break;
    case OMX_CommandPortEnable:  mask |= ILCLIENT_PORT_ENABLED;  break;
-   default: return -1;
+   default:
+  	 ret = -1;
+  	 goto end;
    }
 
    if(other)
@@ -1247,12 +1280,15 @@ int ilclient_wait_for_command_complete_dual(COMPONENT_T *comp, OMX_COMMANDTYPE c
 
       ilclient_unlock_events(comp->client);
 
+     	ilclient_debug_output("ilclient_wait_for_command_complete_dual before vcos_event_flags_get(%u)", mask);
       vcos_event_flags_get(&comp->event, mask, VCOS_OR_CONSUME, VCOS_SUSPEND, &set);
+      ilclient_debug_output("ilclient_wait_for_command_complete_dual after vcos_event_flags_get: %u", set);
    }
 
    if(other)
       other->related = NULL;
-
+end:
+	ilclient_debug_output("ilclient_wait_for_command_complete_dual: %i", ret);
    return ret;
 }
 
@@ -1362,12 +1398,13 @@ OMX_BUFFERHEADERTYPE *ilclient_get_input_buffer(COMPONENT_T *comp, int portIndex
  *
  * Returns: void
  ***********************************************************/
-void ilclient_debug_output(char *format, ...)
-{
-   va_list args;
-
+void ilclient_debug_output_internal(const char* file, int line, const char *format, ...)
+{  va_list args;
+   fprintf(stderr, "%lx %lx %p\n  %s:%d ", clock(), syscall(SYS_gettid), &format, file, line);
    va_start(args, format);
-   vcos_vlog_info(format, args);
+   //vcos_vlog_info(format, args);
+   vfprintf(stderr, format, args);
+   fputc('\n', stderr);
    va_end(args);
 }
 
@@ -1384,7 +1421,9 @@ Static functions
  ***********************************************************/
 static void ilclient_lock_events(ILCLIENT_T *st)
 {
+	//ilclient_debug_output("ilclient_lock_events ...");
    vcos_semaphore_wait(&st->event_sema);
+ 	//ilclient_debug_output("ilclient_lock_events done");
 }
 
 /***********************************************************
@@ -1396,6 +1435,7 @@ static void ilclient_lock_events(ILCLIENT_T *st)
  ***********************************************************/
 static void ilclient_unlock_events(ILCLIENT_T *st)
 {
+ 	//ilclient_debug_output("ilclient_unlock_events");
    vcos_semaphore_post(&st->event_sema);
 }
 
@@ -1418,6 +1458,8 @@ static OMX_ERRORTYPE ilclient_event_handler(OMX_IN OMX_HANDLETYPE hComponent,
    ILEVENT_T *event;
    OMX_ERRORTYPE error = OMX_ErrorNone;
 
+   ilclient_debug_output("ilclient_event_handler(%p, %p{%s}, %u, %u, %u, %p)",
+  		hComponent, st, st->name, eEvent, nData1, nData2, pEventData);
    ilclient_lock_events(st->client);
 
    // go through the events on this component and remove any duplicates in the
@@ -1655,7 +1697,12 @@ static OMX_ERRORTYPE ilclient_empty_buffer_done(OMX_IN OMX_HANDLETYPE hComponent
    COMPONENT_T *st = (COMPONENT_T *) pAppData;
    OMX_BUFFERHEADERTYPE *list;
 
-   ilclient_debug_output("%s: empty buffer done %p", st->name, pBuffer);
+   if (!st)
+   { ilclient_debug_output("%p, empty buffer done %p with NULL pAppData - ignoring", hComponent, pBuffer);
+		 return OMX_ErrorBadParameter;
+   }
+
+   ilclient_debug_output("%p, %p{%s}: empty buffer done %p", hComponent, st, st->name, pBuffer);
 
    vcos_semaphore_wait(&st->sema);
    // insert at end of the list, so we process buffers in

@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: vdr-rpihddevice 0.0.8\n"
 "Report-Msgid-Bugs-To: <see README>\n"
-"POT-Creation-Date: 2016-04-27 15:09+0200\n"
+"POT-Creation-Date: 2018-03-10 19:37+0100\n"
 "PO-Revision-Date: 2014-03-22 03:22+0200\n"
 "Last-Translator: Rolf Ahrenberg\n"
 "Language-Team: Finnish <vdr@linuxtv.org>\n"
@@ -27,6 +27,12 @@ msgstr "analoginen"
 
 msgid "HDMI"
 msgstr "HDMI"
+
+msgid "ALSA 0,0"
+msgstr ""
+
+msgid "ALSA 1,0"
+msgstr ""
 
 msgid "pass through"
 msgstr "läpivienti"

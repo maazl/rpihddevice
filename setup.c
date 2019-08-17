@@ -48,6 +48,8 @@ public:
 	{
 		m_audioPort[0] = tr("analog");
 		m_audioPort[1] = tr("HDMI");
+		m_audioPort[2] = tr("ALSA 0,0");
+		m_audioPort[3] = tr("ALSA 1,0");
 
 		m_audioFormat[0] = tr("pass through");
 		m_audioFormat[1] = tr("multi channel PCM");
@@ -139,7 +141,7 @@ private:
 				tr("Video Framing"), &m_video.framing, 3, m_videoFraming));
 
 		Add(new cMenuEditStraItem(
-				tr("Audio Port"), &m_audio.port, 2, m_audioPort));
+				tr("Audio Port"), &m_audio.port, 4, m_audioPort));
 
 		if (m_audio.port == 1)
 		{
@@ -158,7 +160,7 @@ private:
 	cRpiSetup::VideoParameters m_video;
 	cRpiSetup::OsdParameters   m_osd;
 
-	const char *m_audioPort[2];
+	const char *m_audioPort[4];
 	const char *m_audioFormat[3];
 	const char *m_videoFraming[3];
 	const char *m_videoResolution[8];

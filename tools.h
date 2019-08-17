@@ -25,7 +25,8 @@
 #define DLOG(a...) dsyslog("rpihddevice: " a)
 
 #ifdef DEBUG
-#define DBG(a...)  dsyslog("rpihddevice: " a)
+void debug_output(const char* file, int line, const char *format, ...);
+#define DBG(a...)  debug_output(__FILE__, __LINE__, a)
 #else
 #define DBG(a...)  void()
 #endif
@@ -170,12 +171,23 @@ public:
 
 	enum ePort {
 		eLocal,
-		eHDMI
+		eHDMI,
+		eALSA0,
+		eALSA1
 	};
 
 	static const char* Str(ePort port) {
-		return 	(port == eLocal) ? "local" :
-				(port == eHDMI)  ? "HDMI"  : "unknown";
+		switch (port)
+		{case eLocal:
+			return "local";
+		 case eHDMI:
+			return "HDMI";
+		 case eALSA0:
+			return "ALSA 0,0";
+		 case eALSA1:
+			return "ALSA 1,0";
+		}
+		return  "unknown";
 	}
 };
 

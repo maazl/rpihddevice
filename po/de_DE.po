@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: vdr-rpihddevice 1.0.0\n"
 "Report-Msgid-Bugs-To: <see README>\n"
-"POT-Creation-Date: 2016-04-27 15:09+0200\n"
+"POT-Creation-Date: 2018-03-10 19:37+0100\n"
 "PO-Revision-Date: 2016-04-27 15:11+0100\n"
 "Last-Translator: Thomas Reufer <thomas@reufer.ch>\n"
 "Language-Team: German\n"
@@ -29,6 +29,12 @@ msgstr "analog"
 
 msgid "HDMI"
 msgstr "HDMI"
+
+msgid "ALSA 0,0"
+msgstr ""
+
+msgid "ALSA 1,0"
+msgstr ""
 
 msgid "pass through"
 msgstr "Pass-Through"

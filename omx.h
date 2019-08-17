@@ -147,6 +147,7 @@ private:
 	ILCLIENT_T 	*m_client;
 	COMPONENT_T	*m_comp[cOmx::eNumComponents + 1];
 	TUNNEL_T 	 m_tun[cOmx::eNumTunnels + 1];
+	int m_AudioStartPort;
 
 	cVideoFrameFormat m_videoFrameFormat;
 
