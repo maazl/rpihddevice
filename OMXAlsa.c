@@ -108,7 +108,7 @@ template <class X> static void omx_init(X &omx)
 #endif
 
 #define CINFO(comp, port, msg...) CLOG(1, comp, port, msg)
-#define CDEBUG(comp, port, msg...) //CLOG(0, comp, port, msg)
+#define CDEBUG(comp, port, msg...) CLOG(0, comp, port, msg)
 
 /* Generic OMX helpers */
 
@@ -375,10 +375,10 @@ static OMX_ERRORTYPE gomx_use_buffer(OMX_HANDLETYPE hComponent, OMX_BUFFERHEADER
 	OMX_BUFFERHEADERTYPE *hdr;
 	GOMX_PORT *port;
 	void *buf;
-	CDEBUG(comp, port, "gomx_use_buffer(,, %p, %u, %p)", pAppPrivate, nSizeBytes, pBuffer);
 
 	if (comp->state == OMX_StateInvalid) return OMX_ErrorInvalidState;
 	if (!(port = gomx_get_port(comp, nPortIndex))) return OMX_ErrorBadPortIndex;
+	CDEBUG(comp, port, "gomx_use_buffer(,, %p, %u, %p)", pAppPrivate, nSizeBytes, pBuffer);
 
 	if (!( comp->state == OMX_StateIdle ||
 		(comp->state == OMX_StateLoaded && comp->wanted_state == OMX_StateIdle) ||
@@ -752,7 +752,7 @@ static OMX_ERRORTYPE gomx_do_port_command(GOMX_COMPONENT *comp, GOMX_PORT *port,
 		break;
 	case OMX_CommandPortDisable:
 		port->def.bEnabled = OMX_FALSE;
-		//if (port->flush) port->flush(comp, port);
+		if (port->flush) port->flush(comp, port);
 		r = __gomx_port_unpopulate(comp, port);
 		break;
 	default:
@@ -1141,42 +1141,40 @@ static void *omxalsasink_worker(void *ptr)
 	period_size_max = buffer_size / 3;
 
 	snd_pcm_hw_params_alloca(&hwp);
-	snd_pcm_hw_params_any(dev, hwp);
-	CDEBUG(comp, 0, "P1 %u", sink->pcm.nChannels);
-	err = snd_pcm_hw_params_set_channels(dev, hwp, sink->pcm.nChannels);
+	err = snd_pcm_hw_params_any(dev, hwp);
+	err = snd_pcm_hw_params_set_rate_resample(dev, hwp, 1);
 	if (err) goto alsa_error;
 	CDEBUG(comp, 0, "P2 %u", sink->pcm.bInterleaved);
 	err = snd_pcm_hw_params_set_access(dev, hwp, sink->pcm.bInterleaved ? SND_PCM_ACCESS_RW_INTERLEAVED : SND_PCM_ACCESS_RW_NONINTERLEAVED);
 	if (err) goto alsa_error;
-	CDEBUG(comp, 0, "P3 %i", rate);
-	err = snd_pcm_hw_params_set_rate_near(dev, hwp, &rate, 0);
-	if (err < 0) goto alsa_error; // err might be = rate, but only < 0 is an error
 	CDEBUG(comp, 0, "P4 %i", sink->pcm_format);
-	err = snd_pcm_hw_params_set_format(dev, hwp, sink->pcm_format);
+	err = snd_pcm_hw_params_set_format(dev, hwp, SND_PCM_FORMAT_S16_LE);
 	if (err) goto alsa_error;
-	/*snd_pcm_uframes_t f;
-	int d;
-	snd_pcm_hw_params_get_period_size_min(hwp, &f, &d);
-	CDEBUG(comp, 0, "period_size_min: %lu, %i", f, d);
-	snd_pcm_hw_params_get_period_size_max(hwp, &f, &d);
-	CDEBUG(comp, 0, "period_size_max: %lu, %i", f, d);
+	CDEBUG(comp, 0, "P1 %u", sink->pcm.nChannels);
+	err = snd_pcm_hw_params_set_channels(dev, hwp, sink->pcm.nChannels);
+	if (err) goto alsa_error;
+	CDEBUG(comp, 0, "P3 %i", rate);
+	{ unsigned r2 = 48000;
+	int dir = 0;
+	err = snd_pcm_hw_params_set_rate_near(dev, hwp, &r2, &dir);
+	CDEBUG(comp, 0, "P3a %u, %i, %i", r2, err, dir); }
+	if (err < 0) goto alsa_error; // err might be = rate, but only < 0 is an error
 	CDEBUG(comp, 0, "P5 %lu", period_size_max);
 	err = snd_pcm_hw_params_set_period_size_max(dev, hwp, &period_size_max, 0);
-	if (err) goto alsa_error;*/
+	if (err) goto alsa_error;
 	CDEBUG(comp, 0, "P6 %lu", buffer_size);
 	err = snd_pcm_hw_params_set_buffer_size_near(dev, hwp, &buffer_size);
 	if (err < 0) goto alsa_error; // err might be = buffer_size, but only < 0 is an error
-	/*CDEBUG(comp, 0, "P7 %lu", period_size);
+	CDEBUG(comp, 0, "P7 %lu", period_size);
 	err = snd_pcm_hw_params_set_period_size_near(dev, hwp, &period_size, 0);
-	if (err < 0) goto alsa_error; // err might be = period_size, but only < 0 is an error*/
+	if (err < 0) goto alsa_error; // err might be = period_size, but only < 0 is an error
 	CDEBUG(comp, 0, "P8");
 	err = snd_pcm_hw_params(dev, hwp);
 	if (err) goto alsa_error;
-	CDEBUG(comp, 0, "P9");
+	CDEBUG(comp, 0, "P9 %u", sink->pcm.nBitPerSample);
 
-	sink->pcm.nSamplingRate = rate;
+	sink->sample_rate = sink->pcm.nSamplingRate;// = rate;
 	sink->frame_size = (sink->pcm.nChannels * sink->pcm.nBitPerSample) >> 3;
-	sink->sample_rate = rate;
 
 #ifdef DO_RESAMPLE
 	layout = av_get_default_channel_layout(sink->pcm.nChannels);
@@ -1294,14 +1292,15 @@ static void *omxalsasink_worker(void *ptr)
 			sink->pcm_delay += out_len;
 			pthread_mutex_unlock(&comp->mutex);
 
-			//out_len <<= 1;
 			while (out_len > 0) {
 				CDEBUG(comp, 0, "L4 %i: %08x %08x", out_len, ((int*)out_ptr)[0], ((int*)out_ptr)[1]);
 				n = snd_pcm_writei(dev, out_ptr, out_len);
 				if (n < 0) {
 					CINFO(comp, 0, "alsa error: %ld: %s", n, snd_strerror(n));
-					snd_pcm_recover(dev, n, 1);
-					n = 0;
+					if (snd_pcm_recover(dev, n, 1) == 0)
+						continue;
+					CINFO(comp, 0, "failed to recover from alsa error");
+					break;
 				}
 				out_len -= n;
 				n *= sink->frame_size;
@@ -1460,8 +1459,6 @@ static OMX_ERRORTYPE omxalsasink_create(OMX_HANDLETYPE *pHandle, OMX_PTR pAppDat
 }
 
 /* OMX Glue to get the handle */
-
-#include <OMXAlsa.h>
 
 OMX_ERRORTYPE OMXALSA_GetHandle(OMX_OUT OMX_HANDLETYPE* pHandle, OMX_IN const char* cComponentName,
 	OMX_IN  OMX_PTR pAppData, OMX_IN OMX_CALLBACKTYPE* pCallbacks)

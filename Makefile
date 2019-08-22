@@ -62,7 +62,7 @@ VCLIBDIR =$(SDKSTAGE)/opt/vc/lib
 INCLUDES += -I$(ILCDIR) -I$(VCINCDIR) -I$(VCINCDIR)/interface/vcos/pthreads 
 INCLUDES += -I$(VCINCDIR)/interface/vmcs_host/linux
 
-LDLIBS  += -lbcm_host -lvcos -lvchiq_arm -lopenmaxil -lGLESv2 -lbrcmEGL -lpthread -lrt
+LDLIBS  += -lbcm_host -lvcos -lvchiq_arm -lopenmaxil -lGLESv2 -lbrcmEGL -lpthread -lrt -lasound
 LDLIBS  += -Wl,--whole-archive $(ILCDIR)/libilclient.a -Wl,--no-whole-archive
 LDFLAGS += -L$(VCLIBDIR)
 
@@ -101,17 +101,17 @@ endif
 LDLIBS   += $(call LIBAV_PKGCFG,--libs libavcodec) $(call LIBAV_PKGCFG,--libs libavformat) $(call LIBAV_PKGCFG,--libs libavdevice)
 INCLUDES += $(call LIBAV_PKGCFG,--cflags libavcodec) $(call LIBAV_PKGCFG,--cflags libavformat) $(call LIBAV_PKGCFG,--cflags libavdevice)
 
-ifeq ($(call LIBAV_PKGCFG,--exists libswresample && echo 1), 1)
-	DEFINES  += -DHAVE_LIBSWRESAMPLE
-	LDLIBS   += $(call LIBAV_PKGCFG,--libs libswresample)
-	INCLUDES += $(call LIBAV_PKGCFG,--cflags libswresample)
-else
+#ifeq ($(call LIBAV_PKGCFG,--exists libswresample && echo 1), 1)
+#	DEFINES  += -DHAVE_LIBSWRESAMPLE
+#	LDLIBS   += $(call LIBAV_PKGCFG,--libs libswresample)
+#	INCLUDES += $(call LIBAV_PKGCFG,--cflags libswresample)
+#else
 ifeq ($(call LIBAV_PKGCFG,--exists libavresample && echo 1), 1)
 	DEFINES  += -DHAVE_LIBAVRESAMPLE
 	LDLIBS   += $(call LIBAV_PKGCFG,--libs libavresample)
 	INCLUDES += $(call LIBAV_PKGCFG,--cflags libavresample)
 endif
-endif
+#endif
 
 LDLIBS   += $(shell pkg-config --libs freetype2)
 INCLUDES += $(shell pkg-config --cflags freetype2)
@@ -119,7 +119,7 @@ INCLUDES += $(shell pkg-config --cflags freetype2)
 ### The object files (add further files here):
 
 ILCLIENT = $(ILCDIR)/libilclient.a
-OBJS = $(PLUGIN).o tools.o setup.o omx.o audio.o omxdevice.o ovgosd.o display.o
+OBJS = $(PLUGIN).o tools.o setup.o OMXAlsa.o omx.o audio.o omxdevice.o ovgosd.o display.o
 
 ### The main target:
 
@@ -176,7 +176,7 @@ $(ILCDIR)/%.o: $(ILCDIR)/%.c
 	$(CC) $(CXXFLAGS) -c $(DEFINES) $(INCLUDES) $(ILCOPTS) -o $@ $<
 $(ILCDIR)/%.o: $(ILCDIR)/%.cpp
 	$(CXX) $(CXXFLAGS) -c $(DEFINES) $(INCLUDES) $(ILCOPTS) -o $@ $<
-ILCOBJS = $(ILCDIR)/ilclient.o $(ILCDIR)/ilcore.o $(ILCDIR)/OMXAlsa.o
+ILCOBJS = $(ILCDIR)/ilclient.o $(ILCDIR)/ilcore.o
 $(ILCLIENT): $(ILCOBJS)
 	$(AR) r $@ $^
 
