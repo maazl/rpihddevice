@@ -98,20 +98,8 @@ else
 	LIBAV_PKGCFG = $(shell pkg-config $(1))
 endif
 
-LDLIBS   += $(call LIBAV_PKGCFG,--libs libavcodec) $(call LIBAV_PKGCFG,--libs libavformat) $(call LIBAV_PKGCFG,--libs libavdevice)
-INCLUDES += $(call LIBAV_PKGCFG,--cflags libavcodec) $(call LIBAV_PKGCFG,--cflags libavformat) $(call LIBAV_PKGCFG,--cflags libavdevice)
-
-#ifeq ($(call LIBAV_PKGCFG,--exists libswresample && echo 1), 1)
-#	DEFINES  += -DHAVE_LIBSWRESAMPLE
-#	LDLIBS   += $(call LIBAV_PKGCFG,--libs libswresample)
-#	INCLUDES += $(call LIBAV_PKGCFG,--cflags libswresample)
-#else
-ifeq ($(call LIBAV_PKGCFG,--exists libavresample && echo 1), 1)
-	DEFINES  += -DHAVE_LIBAVRESAMPLE
-	LDLIBS   += $(call LIBAV_PKGCFG,--libs libavresample)
-	INCLUDES += $(call LIBAV_PKGCFG,--cflags libavresample)
-endif
-#endif
+LDLIBS   += $(call LIBAV_PKGCFG,--libs libavcodec) $(call LIBAV_PKGCFG,--libs libavformat) $(call LIBAV_PKGCFG,--libs libavdevice) $(call LIBAV_PKGCFG,--libs libswresample)
+INCLUDES += $(call LIBAV_PKGCFG,--cflags libavcodec) $(call LIBAV_PKGCFG,--cflags libavformat) $(call LIBAV_PKGCFG,--cflags libavdevice) $(call LIBAV_PKGCFG,--cflags libswresample)
 
 LDLIBS   += $(shell pkg-config --libs freetype2)
 INCLUDES += $(shell pkg-config --cflags freetype2)

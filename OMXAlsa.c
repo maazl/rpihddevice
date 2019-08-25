@@ -23,43 +23,13 @@
 #include <IL/OMX_Core.h>
 #include <IL/OMX_Component.h>
 #include <IL/OMX_Broadcom.h>
-#include <sys/syscall.h>
 
 extern "C" {
 #include <libavutil/opt.h>
 
-// ffmpeg's resampling
-/*#ifdef HAVE_LIBSWRESAMPLE
+#ifdef HAVE_LIBSWRESAMPLE
 #  include <libswresample/swresample.h>
 #  define DO_RESAMPLE
-#endif*/
-
-// libav's resampling
-#ifdef HAVE_LIBAVRESAMPLE
-#  include <libavresample/avresample.h>
-#  include <libavutil/samplefmt.h>
-#  define DO_RESAMPLE
-#  define SwrContext AVAudioResampleContext
-inline static AVAudioResampleContext* swr_alloc_set_opts(struct SwrContext* s,
-		int64_t out_ch_layout, enum AVSampleFormat out_sample_fmt, int out_sample_rate,
-		int64_t in_ch_layout, enum AVSampleFormat in_sample_fmt, int in_sample_rate,
-		int log_offset, void* log_ctx)
-{	AVAudioResampleContext* avr = avresample_alloc_context();
-	av_opt_set_int(avr, "in_channel_layout",  in_ch_layout, 0);
-	av_opt_set_int(avr, "out_channel_layout", out_ch_layout, 0);
-	av_opt_set_int(avr, "in_sample_rate",     in_sample_rate, 0);
-	av_opt_set_int(avr, "out_sample_rate",    out_sample_rate, 0);
-	av_opt_set_int(avr, "in_sample_fmt",      in_sample_fmt, 0);
-	av_opt_set_int(avr, "out_sample_fmt",     out_sample_fmt, 0);
-	return avr;
-}
-#  define swr_init   avresample_open
-#  define swr_get_delay(avr,rate) avresample_get_delay(avr)
-#  define swr_set_compensation avresample_set_compensation
-#  define swr_free   avresample_free
-#  define swr_close  avresample_close
-#  define swr_convert(ctx, dst, out_cnt, src, in_cnt) \
-		avresample_convert(ctx, dst, 0, out_cnt, (uint8_t**)src, 0, in_cnt)
 #endif
 
 #ifdef DO_RESAMPLE
@@ -100,6 +70,7 @@ template <class X> static void omx_init(X &omx)
 	else CLog::Log(notice ? LOGNOTICE : LOGDEBUG, "[%p] %s: " msg "\n", comp, __func__ , ##__VA_ARGS__); \
 } while (0)
 #else
+#include <sys/syscall.h>
 #define CLOG(notice, comp, port, msg, ...) do { \
 	struct _GOMX_PORT *_port = (struct _GOMX_PORT *) port; \
 	if (_port) fprintf(stderr, "[%lx:%p port %d]: %s: " msg "\n", syscall(SYS_gettid), comp, _port->def.nPortIndex, __func__ , ##__VA_ARGS__); \
@@ -211,7 +182,7 @@ OMX_ERRORTYPE gomx_get_component_version(
 	strcpy(pComponentName, comp->name);
 	pComponentVersion->nVersion = OMX_VERSION;
 	pSpecVersion->nVersion = OMX_VERSION;
-	snprintf(*pComponentUUID, sizeof(OMX_UUIDTYPE), "%s:%p", comp->name, hComponent);
+	memcpy(pComponentUUID, &hComponent, sizeof hComponent);
 	return OMX_ErrorNone;
 }
 
@@ -1144,36 +1115,33 @@ static void *omxalsasink_worker(void *ptr)
 	err = snd_pcm_hw_params_any(dev, hwp);
 	err = snd_pcm_hw_params_set_rate_resample(dev, hwp, 1);
 	if (err) goto alsa_error;
-	CDEBUG(comp, 0, "P2 %u", sink->pcm.bInterleaved);
-	err = snd_pcm_hw_params_set_access(dev, hwp, sink->pcm.bInterleaved ? SND_PCM_ACCESS_RW_INTERLEAVED : SND_PCM_ACCESS_RW_NONINTERLEAVED);
-	if (err) goto alsa_error;
-	CDEBUG(comp, 0, "P4 %i", sink->pcm_format);
-	err = snd_pcm_hw_params_set_format(dev, hwp, SND_PCM_FORMAT_S16_LE);
-	if (err) goto alsa_error;
 	CDEBUG(comp, 0, "P1 %u", sink->pcm.nChannels);
 	err = snd_pcm_hw_params_set_channels(dev, hwp, sink->pcm.nChannels);
 	if (err) goto alsa_error;
+	CDEBUG(comp, 0, "P2 %u", sink->pcm.bInterleaved);
+	err = snd_pcm_hw_params_set_access(dev, hwp, SND_PCM_ACCESS_RW_INTERLEAVED);
+	if (err) goto alsa_error;
 	CDEBUG(comp, 0, "P3 %i", rate);
-	{ unsigned r2 = 48000;
-	int dir = 0;
-	err = snd_pcm_hw_params_set_rate_near(dev, hwp, &r2, &dir);
-	CDEBUG(comp, 0, "P3a %u, %i, %i", r2, err, dir); }
-	if (err < 0) goto alsa_error; // err might be = rate, but only < 0 is an error
+	err = snd_pcm_hw_params_set_rate_near(dev, hwp, &rate, 0);
+	if (err) goto alsa_error;
+	CDEBUG(comp, 0, "P4 %i, %i", sink->pcm_format, rate);
+	err = snd_pcm_hw_params_set_format(dev, hwp, sink->pcm_format);
+	if (err) goto alsa_error;
 	CDEBUG(comp, 0, "P5 %lu", period_size_max);
 	err = snd_pcm_hw_params_set_period_size_max(dev, hwp, &period_size_max, 0);
 	if (err) goto alsa_error;
 	CDEBUG(comp, 0, "P6 %lu", buffer_size);
 	err = snd_pcm_hw_params_set_buffer_size_near(dev, hwp, &buffer_size);
-	if (err < 0) goto alsa_error; // err might be = buffer_size, but only < 0 is an error
+	if (err) goto alsa_error;
 	CDEBUG(comp, 0, "P7 %lu", period_size);
 	err = snd_pcm_hw_params_set_period_size_near(dev, hwp, &period_size, 0);
-	if (err < 0) goto alsa_error; // err might be = period_size, but only < 0 is an error
+	if (err) goto alsa_error;
 	CDEBUG(comp, 0, "P8");
 	err = snd_pcm_hw_params(dev, hwp);
 	if (err) goto alsa_error;
 	CDEBUG(comp, 0, "P9 %u", sink->pcm.nBitPerSample);
 
-	sink->sample_rate = sink->pcm.nSamplingRate;// = rate;
+	sink->pcm.nSamplingRate = sink->sample_rate = rate;
 	sink->frame_size = (sink->pcm.nChannels * sink->pcm.nBitPerSample) >> 3;
 
 #ifdef DO_RESAMPLE
@@ -1214,9 +1182,9 @@ static void *omxalsasink_worker(void *ptr)
 			buf = (OMX_BUFFERHEADERTYPE*) gomxq_dequeue(&sink->playq);
 		if (!buf) {
 			clock_gettime(CLOCK_MONOTONIC, &ts);
-			ts.tv_nsec += 10000000UL; /* 10 ms */
-			if (ts.tv_nsec > 1000000000UL) {
-				ts.tv_nsec -= 1000000000UL;
+			ts.tv_nsec += 10000000L; /* 10 ms */
+			if (ts.tv_nsec >= 1000000000L) {
+				ts.tv_nsec -= 1000000000L;
 				ts.tv_sec++;
 			}
 			CDEBUG(comp, 0, "L1 %i", timescale);
@@ -1261,7 +1229,7 @@ static void *omxalsasink_worker(void *ptr)
 			int in_len, out_len;
 
 			pthread_mutex_unlock(&comp->mutex);
-			CDEBUG(comp, 0, "L3 %x", buf->nFlags);
+			CDEBUG(comp, 0, "L3 %x, %i", buf->nFlags, buf->nOffset);
 
 			in_ptr = (uint8_t *)(buf->pBuffer + buf->nOffset);
 			in_len = buf->nFilledLen / sink->frame_size;
@@ -1294,6 +1262,7 @@ static void *omxalsasink_worker(void *ptr)
 
 			while (out_len > 0) {
 				CDEBUG(comp, 0, "L4 %i: %08x %08x", out_len, ((int*)out_ptr)[0], ((int*)out_ptr)[1]);
+				//memset(out_ptr, 0, out_len * sink->frame_size);
 				n = snd_pcm_writei(dev, out_ptr, out_len);
 				if (n < 0) {
 					CINFO(comp, 0, "alsa error: %ld: %s", n, snd_strerror(n));

@@ -54,7 +54,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "IL/OMX_Broadcom.h"
 #include "ilclient.h"
-#include "OMXAlsa.h"
+#include "../OMXAlsa.h"
 
 #define VCOS_LOG_CATEGORY (&ilclient_log_category)
 
