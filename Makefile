@@ -98,6 +98,7 @@ else
 	LIBAV_PKGCFG = $(shell pkg-config $(1))
 endif
 
+DEFINES  += -DHAVE_LIBSWRESAMPLE
 LDLIBS   += $(call LIBAV_PKGCFG,--libs libavcodec) $(call LIBAV_PKGCFG,--libs libavformat) $(call LIBAV_PKGCFG,--libs libavdevice) $(call LIBAV_PKGCFG,--libs libswresample)
 INCLUDES += $(call LIBAV_PKGCFG,--cflags libavcodec) $(call LIBAV_PKGCFG,--cflags libavformat) $(call LIBAV_PKGCFG,--cflags libavdevice) $(call LIBAV_PKGCFG,--cflags libswresample)
 

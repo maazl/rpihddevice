@@ -27,10 +27,10 @@
 extern "C" {
 #include <libavutil/opt.h>
 
-#ifdef HAVE_LIBSWRESAMPLE
+/*#ifdef HAVE_LIBSWRESAMPLE
 #  include <libswresample/swresample.h>
 #  define DO_RESAMPLE
-#endif
+#endif*/
 
 #ifdef DO_RESAMPLE
 #include <libavutil/channel_layout.h>
