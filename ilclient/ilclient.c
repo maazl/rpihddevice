@@ -353,7 +353,7 @@ int ilclient_create_component(ILCLIENT_T *client, COMPONENT_T **comp, const char
 
       if(OMX_GetComponentVersion((*comp)->comp, name, &compVersion, &specVersion, &uid) == OMX_ErrorNone)
       {
-         vcos_snprintf((*comp)->name, sizeof((*comp)->name), "cl:%s", uid+4);
+         //vcos_snprintf((*comp)->name, sizeof((*comp)->name), "cl:%s", uid+4);
          (*comp)->name[sizeof((*comp)->name)-1] = 0;
          vcos_snprintf((*comp)->bufname, sizeof((*comp)->bufname), "cl:%s buffer", uid+4);
          (*comp)->bufname[sizeof((*comp)->bufname)-1] = 0;
@@ -730,6 +730,7 @@ void ilclient_cleanup_components(COMPONENT_T *list[])
       ilclient_return_events(list[i]);
       if (list[i]->comp)
       {
+         ilclient_debug_output("ilclient_cleanup_components: %s", list[i]->name);
          if (strncmp(list[i]->name, "cl:OMX.alsa.", 12) == 0)
             error = OMXALSA_FreeHandle(list[i]->comp);
          else

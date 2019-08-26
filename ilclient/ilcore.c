@@ -40,6 +40,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <stdlib.h>
 #include <string.h>
 
+#include "ilclient.h"
 #include "IL/OMX_Component.h"
 #include "interface/vcos/vcos.h"
 
@@ -201,6 +202,7 @@ OMX_ERRORTYPE OMX_APIENTRY OMX_GetHandle(
       vcos_mutex_unlock(&lock);
    }
 
+   ilclient_debug_output("OMX_GetHandle: %i, %p", eError, *pHandle);
    return eError;
 }
 
@@ -210,6 +212,8 @@ OMX_ERRORTYPE OMX_APIENTRY OMX_FreeHandle(
 {
    OMX_ERRORTYPE eError = OMX_ErrorNone;
    OMX_COMPONENTTYPE *pComp;
+
+   ilclient_debug_output("OMX_FreeHandle(%p)", hComponent);
 
    if (hComponent == NULL || ilcs_service == NULL)
       return OMX_ErrorBadParameter;
