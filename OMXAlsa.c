@@ -329,10 +329,9 @@ static void __gomx_event(GOMX_COMPONENT *comp, OMX_EVENTTYPE eEvent, OMX_U32 nDa
 
 static void __gomx_port_update_buffer_state(GOMX_COMPONENT *comp, GOMX_PORT *port)
 {
-	if (port->num_buffers_old == port->num_buffers)
-		return;
-
-	port->def.bPopulated = (port->num_buffers >= port->def.nBufferCountActual) ? OMX_TRUE : OMX_FALSE;
+	CDEBUG(comp, port, "__gomx_port_update_buffer_state() - %u, %u, %u",port->num_buffers_old, port->num_buffers, port->def.nBufferCountActual);
+	if (port->num_buffers_old != port->num_buffers)
+		port->def.bPopulated = (port->num_buffers >= port->def.nBufferCountActual) ? OMX_TRUE : OMX_FALSE;
 	if (port->num_buffers == 0)
 		pthread_cond_signal(&port->cond_no_buffers);
 	else if (port->num_buffers == port->def.nBufferCountActual)
@@ -529,7 +528,9 @@ static OMX_ERRORTYPE __gomx_port_unpopulate(GOMX_COMPONENT *comp, GOMX_PORT *por
 		/* Wait client / tunnel supplier to allocate buffers */
 		CINFO(comp, port, "waiting %d buffers to be freed", (int)port->num_buffers);
 		while (port->num_buffers > 0)
-			pthread_cond_wait(&port->cond_no_buffers, &comp->mutex);
+		{	pthread_cond_wait(&port->cond_no_buffers, &comp->mutex);
+			CDEBUG(comp, port, "waiting %d buffers to be freed", (int)port->num_buffers);
+		}
 	}
 
 	CINFO(comp, port, "UNPOPULATED");
