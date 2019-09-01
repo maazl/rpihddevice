@@ -908,7 +908,10 @@ typedef struct _OMX_ALSASINK {
 	snd_pcm_format_t pcm_format;
 	snd_pcm_state_t pcm_state;
 	snd_pcm_sframes_t pcm_delay;
-	char device_name[16];
+	char device[32];
+	char mixer[32];
+	char control[32];
+  snd_mixer_elem_t *elem;
 } OMX_ALSASINK;
 
 static OMX_ERRORTYPE omxalsasink_set_parameter(OMX_HANDLETYPE hComponent, OMX_INDEXTYPE nParamIndex, OMX_PTR pComponentParameterStructure)
@@ -1038,7 +1041,9 @@ static OMX_ERRORTYPE omxalsasink_set_config(OMX_HANDLETYPE hComponent, OMX_INDEX
 	GOMX_COMPONENT *comp = (GOMX_COMPONENT*) hComponent;
 	OMX_ALSASINK *sink = (OMX_ALSASINK*) hComponent;
 	OMX_CONFIG_BOOLEANTYPE *bt;
-	OMX_CONFIG_BRCMAUDIODESTINATIONTYPE *adest;
+	OMX_CONFIG_ALSAAUDIODESTINATIONTYPE *adest;
+	OMX_AUDIO_CONFIG_VOLUMETYPE *volume;
+	OMX_AUDIO_CONFIG_MUTETYPE *mute;
 	OMX_ERRORTYPE r;
 
 	if (comp->state == OMX_StateInvalid) return OMX_ErrorInvalidState;
@@ -1050,12 +1055,38 @@ static OMX_ERRORTYPE omxalsasink_set_config(OMX_HANDLETYPE hComponent, OMX_INDEX
 		break;
 	case OMX_IndexConfigBrcmAudioDestination:
 		if ((r = omx_cast(adest, pComponentConfigStructure))) return r;
-		strncpy(sink->device_name, (const char*) adest->sName, sizeof sink->device_name - 1);
-		CDEBUG(comp, 0, "OMX_IndexConfigBrcmAudioDestination %s", adest->sName);
+		strncpy(sink->device, (const char*) adest->device, sizeof sink->device - 1);
+		strncpy(sink->mixer, (const char*) adest->mixer, sizeof sink->mixer - 1);
+		strncpy(sink->control, (const char*) adest->control, sizeof sink->control - 1);
+		CDEBUG(comp, 0, "OMX_IndexConfigBrcmAudioDestination %s", adest->device);
 		break;
 	case OMX_IndexConfigAudioVolume:
+		if (sink->elem && !(r = omx_cast(volume, pComponentConfigStructure)))
+		{
+			long min, max;
+			int err = snd_mixer_selem_get_playback_volume_range(sink->elem, &min, &max);
+			if (!err)
+			{
+				long val = min + volume->sVolume.nValue * (max - min) / 100;
+				err = snd_mixer_selem_set_playback_volume_all(sink->elem, val);
+				if (!err)
+				{
+					CDEBUG(comp, 0, "OMX_IndexConfigAudioVolume %li, %li, %li", min, max, val);
+					break;
+				}
+			}
+			CINFO(comp, 0, "ALSA mixer error @ SetVolume: %s", snd_strerror(err));
+		}
+		break;
 	case OMX_IndexConfigAudioMute:
-		CINFO(comp, 0, "UNSUPPORTED, ignored %x, %p", nIndex, pComponentConfigStructure);
+		if (sink->elem && !(r = omx_cast(mute, pComponentConfigStructure)))
+		{
+			int err = snd_mixer_selem_set_playback_switch_all(sink->elem, !mute->bMute);
+			if (err != 0)
+				CINFO(nullptr, 0, "ALSA mixer error @ SetMute: %s", snd_strerror(err));
+			else
+				CDEBUG(comp, 0, "OMX_IndexConfigAudioMute %i", mute->bMute);
+		}
 		break;
 	default:
 		CINFO(comp, 0, "UNSUPPORTED %x, %p", nIndex, pComponentConfigStructure);
@@ -1086,10 +1117,11 @@ static void *omxalsasink_worker(void *ptr)
 	OMX_ALSASINK *sink = (OMX_ALSASINK *) hComponent;
 	OMX_BUFFERHEADERTYPE *buf;
 	GOMX_PORT *clock_port = &comp->ports[OMXALSA_PORT_CLOCK];
-	snd_pcm_t *dev = 0;
+	snd_pcm_t *dev = NULL;
 	snd_pcm_sframes_t n, delay;
 	snd_pcm_hw_params_t *hwp;
 	snd_pcm_uframes_t buffer_size, period_size, period_size_max;
+  snd_mixer_t *mixer = NULL;
 #ifdef DO_RESAMPLE
 	GOMX_PORT *audio_port = &comp->ports[OMXALSA_PORT_AUDIO];
 	SwrContext *resampler = 0;
@@ -1102,9 +1134,9 @@ static void *omxalsasink_worker(void *ptr)
 	struct timespec ts;
 	int err;
 
-	CINFO(comp, 0, "worker started: %s", sink->device_name);
+	CINFO(comp, 0, "worker started: %s", sink->device);
 
-	err = snd_pcm_open(&dev, sink->device_name, SND_PCM_STREAM_PLAYBACK, 0);
+	err = snd_pcm_open(&dev, sink->device, SND_PCM_STREAM_PLAYBACK, 0);
 	if (err < 0) goto alsa_error;
 
 	rate = sink->pcm.nSamplingRate;
@@ -1163,6 +1195,30 @@ static void *omxalsasink_worker(void *ptr)
 #endif
 
 	CINFO(comp, 0, "sample_rate %d, frame_size %d", rate, sink->frame_size);
+
+	// open mixer device
+	err = snd_mixer_open(&mixer, 0);
+	if (!err) {
+		err = snd_mixer_attach(mixer, sink->mixer);
+		if (!err) {
+			err = snd_mixer_selem_register(mixer, NULL, NULL);
+			if (!err) {
+				err = snd_mixer_load(mixer);
+				if (!err) {
+					snd_mixer_selem_id_t *sid;
+					snd_mixer_selem_id_alloca(&sid);
+					snd_mixer_selem_id_set_index(sid, 0);
+					snd_mixer_selem_id_set_name(sid, sink->control);
+					sink->elem = snd_mixer_find_selem(mixer, sid);
+					if (sink->elem == NULL)
+						CINFO(nullptr, 0, "Mixer control %s/%s not found.", sink->device, sink->control);
+					goto mixer_done;
+				}
+			}
+		}
+	}
+	CINFO(comp, 0, "ALSA mixer error @ %s/%s: %s", sink->device, sink->control, snd_strerror(err));
+mixer_done:
 
 	pthread_mutex_lock(&comp->mutex);
 	while (comp->wanted_state == OMX_StateExecuting) {
@@ -1295,6 +1351,7 @@ static void *omxalsasink_worker(void *ptr)
 	}
 	pthread_mutex_unlock(&comp->mutex);
 cleanup:
+	if (mixer) snd_mixer_close(mixer);
 	if (dev) snd_pcm_close(dev);
 #ifdef DO_RESAMPLE
 	if (resampler) swr_close(resampler);
@@ -1375,7 +1432,9 @@ static OMX_ERRORTYPE omxalsasink_create(OMX_HANDLETYPE *pHandle, OMX_PTR pAppDat
 	sink = (OMX_ALSASINK *) calloc(1, sizeof *sink);
 	if (!sink) return OMX_ErrorInsufficientResources;
 
-	strncpy(sink->device_name, "default", sizeof sink->device_name - 1);
+	strcpy(sink->device, "default");
+	strcpy(sink->mixer, "default");
+	strcpy(sink->control, "PCM");
 	gomxq_init(&sink->playq, offsetof(OMX_BUFFERHEADERTYPE, pInputPortPrivate));
 
 	/* Audio port */

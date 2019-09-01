@@ -20,6 +20,7 @@
 #include <queue>
 
 #include "omx.h"
+#include "OMXAlsa.h"
 #include "display.h"
 #include "setup.h"
 
@@ -525,11 +526,11 @@ int cOmx::Init(int display, int layer)
 
 	// create audio_render
 	if (ilclient_create_component(m_client, &m_comp[eAudioRender],
-		cRpiSetup::GetAudioPort() >= cRpiAudioPort::eALSA0 ? "OMX.alsa.audio_render" : "audio_render",
+		cRpiSetup::GetAudioPort() == cRpiAudioPort::eALSA ? "OMX.alsa.audio_render" : "audio_render",
 		(ILCLIENT_CREATE_FLAGS_T)(ILCLIENT_DISABLE_ALL_PORTS | ILCLIENT_ENABLE_INPUT_BUFFERS)) != 0)
 		ELOG("failed creating audio render!");
 	// does not work:  m_AudioStartPort = ilclient_get_port_index(m_comp[eAudioRender], OMX_DirOutput, OMX_PortDomainAudio, 0);
-	m_AudioStartPort = cRpiSetup::GetAudioPort() >= cRpiAudioPort::eALSA0 ? 0 : 100;
+	m_AudioStartPort = cRpiSetup::GetAudioPort() == cRpiAudioPort::eALSA ? 0 : 100;
 	DBG("m_AudioStartPort = %i", m_AudioStartPort);
 
 	//create video_scheduler
@@ -1104,8 +1105,10 @@ void cOmx::SetVideoDecoderExtraBuffers(int extraBuffers)
 		ELOG("failed to set video decoder extra buffers!");
 }
 
-int cOmx::SetupAudioRender(cAudioCodec::eCodec outputFormat, int channels,
-		cRpiAudioPort::ePort audioPort, int samplingRate, int frameSize)
+int cOmx::SetupAudioRender(cAudioCodec::eCodec outputFormat,
+		int channels, cRpiAudioPort::ePort audioPort,
+		const char* alsaDevice, const char* alsaMixer, const char* alsaControl,
+		int samplingRate, int frameSize)
 {
 	DBG("cOmx::SetVideoDecoderExtraBuffers(%u, %i, %u, %i, %i)",
 		outputFormat, channels, audioPort, samplingRate, frameSize);
@@ -1214,10 +1217,13 @@ int cOmx::SetupAudioRender(cAudioCodec::eCodec outputFormat, int channels,
 		break;
 	}
 
-	OMX_CONFIG_BRCMAUDIODESTINATIONTYPE audioDest;
+	OMX_CONFIG_ALSAAUDIODESTINATIONTYPE audioDest;
 	OMX_INIT_STRUCT(audioDest);
-	static const char* omxAudioName[] = { "local", "hdmi", "hw:0,0", "hw:1,0" };
+	static const char* omxAudioName[] = { "local", "hdmi", "alsa" };
 	strcpy((char *)audioDest.sName, omxAudioName[audioPort]);
+	audioDest.device = alsaDevice;
+	audioDest.mixer = alsaMixer;
+	audioDest.control = alsaControl;
 
 	if (OMX_SetConfig(ILC_GET_HANDLE(m_comp[eAudioRender]),
 			OMX_IndexConfigBrcmAudioDestination, &audioDest) != OMX_ErrorNone)

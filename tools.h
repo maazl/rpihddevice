@@ -172,8 +172,7 @@ public:
 	enum ePort {
 		eLocal,
 		eHDMI,
-		eALSA0,
-		eALSA1
+		eALSA,
 	};
 
 	static const char* Str(ePort port) {
@@ -182,10 +181,8 @@ public:
 			return "local";
 		 case eHDMI:
 			return "HDMI";
-		 case eALSA0:
-			return "ALSA 0,0";
-		 case eALSA1:
-			return "ALSA 1,0";
+		 case eALSA:
+			return "ALSA";
 		}
 		return  "unknown";
 	}

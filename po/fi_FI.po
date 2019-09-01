@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: vdr-rpihddevice 0.0.8\n"
 "Report-Msgid-Bugs-To: <see README>\n"
-"POT-Creation-Date: 2018-03-10 19:37+0100\n"
+"POT-Creation-Date: 2019-09-01 16:07+0200\n"
 "PO-Revision-Date: 2014-03-22 03:22+0200\n"
 "Last-Translator: Rolf Ahrenberg\n"
 "Language-Team: Finnish <vdr@linuxtv.org>\n"
@@ -28,10 +28,7 @@ msgstr "analoginen"
 msgid "HDMI"
 msgstr "HDMI"
 
-msgid "ALSA 0,0"
-msgstr ""
-
-msgid "ALSA 1,0"
+msgid "ALSA"
 msgstr ""
 
 msgid "pass through"
@@ -81,6 +78,15 @@ msgstr "Äänilähtö"
 
 msgid "Digital Audio Format"
 msgstr "Digitaaliäänen formaatti"
+
+msgid "ALSA output device"
+msgstr ""
+
+msgid "ALSA mixer device"
+msgstr ""
+
+msgid "ALSA mixer control"
+msgstr ""
 
 msgid "Use GPU accelerated OSD"
 msgstr "Käytä GPU-kiihdytettyä OSD:tä"

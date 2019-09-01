@@ -169,7 +169,7 @@ public:
 
 	int DeInit(void)
 	{
-		av_free_packet(&m_packet);
+		av_packet_unref(&m_packet);
 		return 0;
 	}
 
@@ -1025,6 +1025,7 @@ public:
 		{
 			m_inChannels = channels;
 			cRpiAudioPort::ePort newPort = cRpiSetup::GetAudioPort();
+			const struct cRpiSetup::AlsaParameters& newAlsa = cRpiSetup::AlsaParameters();
 			cAudioCodec::eCodec newCodec = cAudioCodec::ePCM;
 
 			DLOG("new audio codec: %dch %s", channels, cAudioCodec::Str(codec));
@@ -1049,11 +1050,12 @@ public:
 				Flush();
 
 			// save new settings to be applied when render is ready
-			if (newPort != m_port || m_codec != newCodec ||
+			if (newPort != m_port || m_alsa != newAlsa || m_codec != newCodec ||
 					m_outChannels != channels || m_samplingRate != samplingRate)
 			{
 				m_configured = false;
 				m_port = newPort;
+				m_alsa = newAlsa;
 				m_codec = newCodec;
 				m_outChannels = channels;
 				m_samplingRate = samplingRate;
@@ -1106,6 +1108,7 @@ private:
 						m_outChannels);
 
 			m_omx->SetupAudioRender(m_codec, m_outChannels, m_port,
+				m_alsa.device, m_alsa.mixer, m_alsa.control,
 					m_samplingRate, m_frameSize);
 
 			DLOG("set %s audio output format to %dch %s, %d.%dkHz%s",
@@ -1149,6 +1152,7 @@ private:
 	cOmx		        *m_omx;
 
 	cRpiAudioPort::ePort m_port;
+	struct cRpiSetup::AlsaParameters m_alsa;
 	cAudioCodec::eCodec  m_codec;
 	unsigned int         m_inChannels;
 	unsigned int         m_outChannels;

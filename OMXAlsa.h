@@ -1,5 +1,5 @@
 #pragma once
-#include <IL/OMX_Core.h>
+#include <IL/OMX_Broadcom.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -13,3 +13,9 @@ OMX_API OMX_ERRORTYPE OMX_APIENTRY OMXALSA_FreeHandle(OMX_IN OMX_HANDLETYPE hCom
 #ifdef __cplusplus
 }
 #endif
+
+struct OMX_CONFIG_ALSAAUDIODESTINATIONTYPE : OMX_CONFIG_BRCMAUDIODESTINATIONTYPE {
+	const char* device;
+	const char* mixer;
+	const char* control;
+};
