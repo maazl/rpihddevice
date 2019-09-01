@@ -79,7 +79,7 @@ template <class X> static void omx_init(X &omx)
 #endif
 
 #define CINFO(comp, port, msg...) CLOG(1, comp, port, msg)
-#define CDEBUG(comp, port, msg...) CLOG(0, comp, port, msg)
+#define CDEBUG(comp, port, msg...) //CLOG(0, comp, port, msg)
 
 /* Generic OMX helpers */
 
