@@ -33,6 +33,24 @@ class cRpiSetup
 
 public:
 
+	struct AlsaParameters
+	{
+		AlsaParameters() :
+			device("hw:0,0"),
+			mixer("hw:0"),
+			control("PCM") { }
+
+		char device[32];
+		char mixer[32];
+		char control[32];
+
+		bool operator!=(const AlsaParameters& a) const {
+			return strncmp(a.device, device, sizeof device)
+				|| strncmp(a.mixer, mixer, sizeof mixer)
+				|| strncmp(a.control, control, sizeof control);
+		}
+	};
+
 	struct AudioParameters
 	{
 		AudioParameters() :
@@ -40,10 +58,11 @@ public:
 			format(0) { }
 
 		int port;
+		AlsaParameters alsa;
 		int format;
 
-		bool operator!=(const AudioParameters& a) {
-			return (a.port != port) || (a.format != format);
+		bool operator!=(const AudioParameters& a) const {
+			return (a.port != port) || (a.format != format) || a.alsa != alsa;
 		}
 	};
 
@@ -93,8 +112,10 @@ public:
 	static bool HwInit(void);
 
 	static cRpiAudioPort::ePort GetAudioPort(void) {
-		return (GetInstance()->m_audio.port) ?
-				cRpiAudioPort::eHDMI : cRpiAudioPort::eLocal; }
+		return (cRpiAudioPort::ePort)(GetInstance()->m_audio.port); }
+
+	static const AlsaParameters& AlsaParameters(void) {
+		return GetInstance()->m_audio.alsa; }
 
 	static cAudioFormat::eFormat GetAudioFormat(void) {
 		return  GetInstance()->m_audio.format == 0 ? cAudioFormat::ePassThrough :

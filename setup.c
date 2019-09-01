@@ -48,6 +48,7 @@ public:
 	{
 		m_audioPort[0] = tr("analog");
 		m_audioPort[1] = tr("HDMI");
+		m_audioPort[2] = tr("ALSA");
 
 		m_audioFormat[0] = tr("pass through");
 		m_audioFormat[1] = tr("multi channel PCM");
@@ -102,6 +103,9 @@ protected:
 	virtual void Store(void)
 	{
 		SetupStore("AudioPort", m_audio.port);
+		SetupStore("AlsaDevice", m_audio.alsa.device);
+		SetupStore("AlsaMixerDevice", m_audio.alsa.mixer);
+		SetupStore("AlsaMixerControl", m_audio.alsa.control);
 		SetupStore("AudioFormat", m_audio.format);
 
 		SetupStore("VideoFraming", m_video.framing);
@@ -123,32 +127,28 @@ private:
 
 		if (!cRpiDisplay::IsFixedMode())
 		{
-			Add(new cMenuEditStraItem(
-				tr("Resolution"), &m_video.resolution, 8, m_videoResolution));
+			Add(new cMenuEditStraItem(tr("Resolution"), &m_video.resolution, sizeof(m_videoResolution)/sizeof(*m_videoResolution), m_videoResolution));
 
-			Add(new cMenuEditStraItem(
-				tr("Frame Rate"), &m_video.frameRate, 9, m_videoFrameRate));
+			Add(new cMenuEditStraItem(tr("Frame Rate"), &m_video.frameRate, sizeof(m_videoFrameRate)/sizeof(*m_videoFrameRate), m_videoFrameRate));
 		}
 		if (cRpiDisplay::IsProgressive())
-			Add(new cMenuEditStraItem(
-					tr("Use Advanced Deinterlacer"),
-					&m_video.advancedDeinterlacer, 3,
-					m_useAdvancedDeinterlacer));
+			Add(new cMenuEditStraItem(tr("Use Advanced Deinterlacer"), &m_video.advancedDeinterlacer, sizeof(m_useAdvancedDeinterlacer)/sizeof(*m_useAdvancedDeinterlacer), m_useAdvancedDeinterlacer));
 
-		Add(new cMenuEditStraItem(
-				tr("Video Framing"), &m_video.framing, 3, m_videoFraming));
+		Add(new cMenuEditStraItem(tr("Video Framing"), &m_video.framing, sizeof(m_videoFraming)/sizeof(*m_videoFraming), m_videoFraming));
 
-		Add(new cMenuEditStraItem(
-				tr("Audio Port"), &m_audio.port, 2, m_audioPort));
+		Add(new cMenuEditStraItem(tr("Audio Port"), &m_audio.port, sizeof(m_audioPort)/sizeof(*m_audioPort), m_audioPort));
 
-		if (m_audio.port == 1)
-		{
-			Add(new cMenuEditStraItem(tr("Digital Audio Format"),
-					&m_audio.format, 3, m_audioFormat));
+		switch (m_audio.port) {
+		case cRpiAudioPort::eHDMI:
+			Add(new cMenuEditStraItem(tr("Digital Audio Format"), &m_audio.format, sizeof(m_audioFormat)/sizeof(*m_audioFormat), m_audioFormat));
+			break;
+		case cRpiAudioPort::eALSA:
+			Add(new cMenuEditStrItem(tr("ALSA output device"), m_audio.alsa.device, sizeof(m_audio.alsa.device)));
+			Add(new cMenuEditStrItem(tr("ALSA mixer device"), m_audio.alsa.mixer, sizeof(m_audio.alsa.mixer)));
+			Add(new cMenuEditStrItem(tr("ALSA mixer control"), m_audio.alsa.control, sizeof(m_audio.alsa.control)));
 		}
 
-		Add(new cMenuEditBoolItem(
-				tr("Use GPU accelerated OSD"), &m_osd.accelerated));
+		Add(new cMenuEditBoolItem(tr("Use GPU accelerated OSD"), &m_osd.accelerated));
 
 		SetCurrent(Get(current));
 		Display();
@@ -158,7 +158,7 @@ private:
 	cRpiSetup::VideoParameters m_video;
 	cRpiSetup::OsdParameters   m_osd;
 
-	const char *m_audioPort[2];
+	const char *m_audioPort[3];
 	const char *m_audioFormat[3];
 	const char *m_videoFraming[3];
 	const char *m_videoResolution[8];
@@ -318,6 +318,12 @@ bool cRpiSetup::Parse(const char *name, const char *value)
 {
 	if (!strcasecmp(name, "AudioPort"))
 		m_audio.port = atoi(value);
+	else if (!strcasecmp(name, "AlsaDevice"))
+		strncpy(m_audio.alsa.device, value, sizeof(m_audio.alsa.device) - 1);
+	else if (!strcasecmp(name, "AlsaMixerDevice"))
+		strncpy(m_audio.alsa.mixer, value, sizeof(m_audio.alsa.mixer) - 1);
+	else if (!strcasecmp(name, "AlsaMixerControl"))
+		strncpy(m_audio.alsa.control, value, sizeof(m_audio.alsa.control) - 1);
 	else if (!strcasecmp(name, "AudioFormat"))
 		m_audio.format = atoi(value);
 	else if (!strcasecmp(name, "VideoFraming"))

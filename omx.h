@@ -34,9 +34,7 @@ class cOmxEvents;
 
 class cOmx : public cThread
 {
-
 public:
-
 	cOmx();
 	virtual ~cOmx();
 	int Init(int display, int layer);
@@ -93,6 +91,7 @@ public:
 	int SetVideoCodec(cVideoCodec::eCodec codec);
 	int SetupAudioRender(cAudioCodec::eCodec outputFormat,
 			int channels, cRpiAudioPort::ePort audioPort,
+			const char* alsaDevice, const char* alsaMixer, const char* alsaControl,
 			int samplingRate = 0, int frameSize = 0);
 
 	const cVideoFrameFormat *GetVideoFrameFormat(void) {
@@ -147,6 +146,7 @@ private:
 	ILCLIENT_T 	*m_client;
 	COMPONENT_T	*m_comp[cOmx::eNumComponents + 1];
 	TUNNEL_T 	 m_tun[cOmx::eNumTunnels + 1];
+	int m_AudioStartPort;
 
 	cVideoFrameFormat m_videoFrameFormat;
 

@@ -49,6 +49,7 @@ SOFILE = libvdr-$(PLUGIN).so
 
 DEFINES += -DPLUGIN_NAME_I18N='"$(PLUGIN)"'
 DEFINES += -DHAVE_LIBOPENMAX=2 -DOMX -DOMX_SKIP64BIT -DUSE_EXTERNAL_OMX -DHAVE_LIBBCM_HOST -DUSE_EXTERNAL_LIBBCM_HOST -DUSE_VCHIQ_ARM
+#DEFINES += -DDEBUG
 DEFINES += -Wno-psabi -Wno-write-strings -fpermissive
 DEFINES += -D__STL_CONFIG_H
 
@@ -61,8 +62,8 @@ VCLIBDIR =$(SDKSTAGE)/opt/vc/lib
 INCLUDES += -I$(ILCDIR) -I$(VCINCDIR) -I$(VCINCDIR)/interface/vcos/pthreads 
 INCLUDES += -I$(VCINCDIR)/interface/vmcs_host/linux
 
-LDLIBS  += -lbcm_host -lvcos -lvchiq_arm -lopenmaxil -lGLESv2 -lbrcmEGL -lpthread -lrt
-LDLIBS  += -Wl,--whole-archive $(ILCDIR)/libilclient.a -Wl,--no-whole-archive
+LDLIBS  += -lbcm_host -lvcos -lvchiq_arm -lopenmaxil -lGLESv2 -lbrcmEGL -lpthread -lrt -lasound
+LDLIBS  += -Wl,--whole-archive -Wl,--no-whole-archive
 LDFLAGS += -L$(VCLIBDIR)
 
 DEBUG ?= 0
@@ -97,28 +98,17 @@ else
 	LIBAV_PKGCFG = $(shell pkg-config $(1))
 endif
 
-LDLIBS   += $(call LIBAV_PKGCFG,--libs libavcodec) $(call LIBAV_PKGCFG,--libs libavformat)
-INCLUDES += $(call LIBAV_PKGCFG,--cflags libavcodec) $(call LIBAV_PKGCFG,--cflags libavformat)
-
-ifeq ($(call LIBAV_PKGCFG,--exists libswresample && echo 1), 1)
-	DEFINES  += -DHAVE_LIBSWRESAMPLE
-	LDLIBS   += $(call LIBAV_PKGCFG,--libs libswresample)
-	INCLUDES += $(call LIBAV_PKGCFG,--cflags libswresample)
-else
-ifeq ($(call LIBAV_PKGCFG,--exists libavresample && echo 1), 1)
-	DEFINES  += -DHAVE_LIBAVRESAMPLE
-	LDLIBS   += $(call LIBAV_PKGCFG,--libs libavresample)
-	INCLUDES += $(call LIBAV_PKGCFG,--cflags libavresample)
-endif
-endif
+DEFINES  += -DHAVE_LIBSWRESAMPLE
+LDLIBS   += $(call LIBAV_PKGCFG,--libs libavcodec) $(call LIBAV_PKGCFG,--libs libavformat) $(call LIBAV_PKGCFG,--libs libavdevice) $(call LIBAV_PKGCFG,--libs libswresample)
+INCLUDES += $(call LIBAV_PKGCFG,--cflags libavcodec) $(call LIBAV_PKGCFG,--cflags libavformat) $(call LIBAV_PKGCFG,--cflags libavdevice) $(call LIBAV_PKGCFG,--cflags libswresample)
 
 LDLIBS   += $(shell pkg-config --libs freetype2)
 INCLUDES += $(shell pkg-config --cflags freetype2)
 
 ### The object files (add further files here):
 
-ILCLIENT = $(ILCDIR)/libilclient.a
-OBJS = $(PLUGIN).o tools.o setup.o omx.o audio.o omxdevice.o ovgosd.o display.o
+ILCOBJS = $(ILCDIR)/ilclient.o $(ILCDIR)/ilcore.o
+OBJS = $(PLUGIN).o tools.o setup.o OMXAlsa.o omx.o audio.o omxdevice.o ovgosd.o display.o $(ILCOBJS)
 
 ### The main target:
 
@@ -166,11 +156,15 @@ install-i18n: $(I18Nmsgs)
 
 ### Targets:
 
-$(SOFILE): $(ILCLIENT) $(OBJS)
+$(SOFILE): $(OBJS)
 	$(CXX) $(CXXFLAGS) $(LDFLAGS) -shared $(OBJS) $(LDLIBS) -o $@
 
-$(ILCLIENT):
-	$(MAKE) --no-print-directory -C $(ILCDIR) all
+ILCOPTS = -DSTANDALONE  -DTARGET_POSIX -D_LINUX -DPIC -D_REENTRANT
+ILOPTS += -U_FORTIFY_SOURCE -I$(SDKSTAGE)/opt/vc/include/ -I$(SDKSTAGE)/opt/vc/include/interface/vcos/pthreads -I$(SDKSTAGE)/opt/vc/include/interface/vmcs_host/linux
+$(ILCDIR)/%.o: $(ILCDIR)/%.c
+	$(CC) $(CXXFLAGS) -c $(DEFINES) $(INCLUDES) $(ILCOPTS) -o $@ $<
+$(ILCDIR)/%.o: $(ILCDIR)/%.cpp
+	$(CXX) $(CXXFLAGS) -c $(DEFINES) $(INCLUDES) $(ILCOPTS) -o $@ $<
 
 install-lib: $(SOFILE)
 	install -D $^ $(DESTDIR)$(LIBDIR)/$^.$(APIVERSION)
@@ -188,7 +182,7 @@ dist: $(I18Npo) clean
 clean:
 	@-rm -f $(PODIR)/*.mo $(PODIR)/*.pot
 	@-rm -f $(OBJS) $(DEPFILE) *.so *.tgz core* *~
-	$(MAKE) --no-print-directory -C $(ILCDIR) clean
+	@-rm -f $(ILCDIR)/*.o
 
 .PHONY:	cppcheck
 cppcheck:

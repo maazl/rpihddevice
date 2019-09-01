@@ -1,6 +1,9 @@
 VDR Plugin 'rpihddevice' Revision History
 -----------------------------------------
 
+- new:
+  - Added support for ALSA sound output by porting OMXAlsa from omxplayer
+
 2018-07-16: Version 1.0.4
 -------------------------
 - new:

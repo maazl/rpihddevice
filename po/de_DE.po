@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: vdr-rpihddevice 1.0.0\n"
 "Report-Msgid-Bugs-To: <see README>\n"
-"POT-Creation-Date: 2016-04-27 15:09+0200\n"
+"POT-Creation-Date: 2019-09-01 16:07+0200\n"
 "PO-Revision-Date: 2016-04-27 15:11+0100\n"
 "Last-Translator: Thomas Reufer <thomas@reufer.ch>\n"
 "Language-Team: German\n"
@@ -29,6 +29,9 @@ msgstr "analog"
 
 msgid "HDMI"
 msgstr "HDMI"
+
+msgid "ALSA"
+msgstr "ALSA"
 
 msgid "pass through"
 msgstr "Pass-Through"
@@ -77,6 +80,15 @@ msgstr "Audioanschluss"
 
 msgid "Digital Audio Format"
 msgstr "Digitales Audioformat"
+
+msgid "ALSA output device"
+msgstr "ALSA Ausgabe-Device"
+
+msgid "ALSA mixer device"
+msgstr "ALSA Mixer-Device"
+
+msgid "ALSA mixer control"
+msgstr "ALSA Mixer Regler"
 
 msgid "Use GPU accelerated OSD"
 msgstr "OSD mit GPU-Unterstützung"

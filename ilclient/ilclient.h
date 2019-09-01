@@ -449,7 +449,7 @@ VCHPRE_ void VCHPOST_ ilclient_set_empty_buffer_done_callback(ILCLIENT_T *handle
  ***********************************************************/
 VCHPRE_ int VCHPOST_ ilclient_create_component(ILCLIENT_T *handle,
                                                COMPONENT_T **comp,
-                                               char *name,
+                                               const char *name,
                                                ILCLIENT_CREATE_FLAGS_T flags);
 
 /**
@@ -932,7 +932,8 @@ VCHPRE_ int VCHPOST_ ilclient_wait_for_command_complete_dual(COMPONENT_T *comp,
  *
  * @return void
  ***********************************************************/
-VCHPRE_ void VCHPOST_ ilclient_debug_output(char *format, ...);
+VCHPRE_ void VCHPOST_ ilclient_debug_output_internal(const char* file, int line, const char *format, ...);
+#define ilclient_debug_output(a...) //ilclient_debug_output_internal(__FILE__, __LINE__, a)
 
 /**
  * The <DFN>ilclient_get_handle()</DFN> function returns the

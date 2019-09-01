@@ -74,7 +74,8 @@ cRpiDisplay* cRpiDisplay::GetInstance(void)
 							mode.width, mode.height, SDTV_ASPECT_4_3);
 
 				vc_dispmanx_display_close(display);
-			}
+			} else
+				ELOG("failed to open default display!");
 		}
 		if (!s_instance)
 		{

@@ -22,6 +22,21 @@
 #include "tools.h"
 #include <algorithm>
 
+#ifdef DEBUG
+#include <time.h>
+#include <unistd.h>
+#include <sys/syscall.h>
+
+void debug_output(const char* file, int line, const char *format, ...)
+{  va_list args;
+   fprintf(stderr, "%lx %lx %p\n  %s:%i ", clock(), syscall(SYS_gettid), &format, file, line);
+   va_start(args, format);
+   vfprintf(stderr, format, args);
+   fputc('\n', stderr);
+   va_end(args);
+}
+#endif
+
 /*
  * ffmpeg's implementation for rational numbers:
  * https://github.com/FFmpeg/FFmpeg/blob/master/libavutil/rational.c

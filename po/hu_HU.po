@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: vdr-rpihddevice 1.0.0\n"
 "Report-Msgid-Bugs-To: <see README>\n"
-"POT-Creation-Date: 2016-04-27 15:09+0200\n"
+"POT-Creation-Date: 2019-09-01 16:07+0200\n"
 "PO-Revision-Date: 2015-10-16 13:49+0200\n"
 "Last-Translator: Füley István <ifuley at tigercomp dot ro>\n"
 "Language-Team: Hungarian\n"
@@ -29,6 +29,9 @@ msgstr "analog"
 
 msgid "HDMI"
 msgstr "HDMI"
+
+msgid "ALSA"
+msgstr ""
 
 msgid "pass through"
 msgstr "pass through"
@@ -77,6 +80,15 @@ msgstr "Hang kimenet"
 
 msgid "Digital Audio Format"
 msgstr "Digitális hang formátum"
+
+msgid "ALSA output device"
+msgstr ""
+
+msgid "ALSA mixer device"
+msgstr ""
+
+msgid "ALSA mixer control"
+msgstr ""
 
 msgid "Use GPU accelerated OSD"
 msgstr "Hardveresen (GPU) gyorsított OSD"

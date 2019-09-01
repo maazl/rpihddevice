@@ -105,8 +105,10 @@ Plugin-Setup:
   When setting to "stretch", the videos' aspect ratio is adapted to the screen
   and the resulting image might appear distorted.
   
-  Audio Port: Set the audio output port to "analog" or "HDMI". When set to
-  analog out, multi channel audio is sampled down to stereo.
+  Audio Port: Set the audio output port to "analog", "HDMI" or "ALSA".
+  Multi channel audio is sampled down to stereo unless set to HDMI.
+  In case of ALSA additional options allow to configure the ALSA PCM device,
+  the mixer device and the mixer control.
   
   Digital Audio Format: Specify the audio format when using the HDMI port as
   output. If set to "pass through", (E)AC-3 and DTS audio can be decoded by the
