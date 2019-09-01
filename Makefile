@@ -63,7 +63,7 @@ INCLUDES += -I$(ILCDIR) -I$(VCINCDIR) -I$(VCINCDIR)/interface/vcos/pthreads
 INCLUDES += -I$(VCINCDIR)/interface/vmcs_host/linux
 
 LDLIBS  += -lbcm_host -lvcos -lvchiq_arm -lopenmaxil -lGLESv2 -lbrcmEGL -lpthread -lrt -lasound
-LDLIBS  += -Wl,--whole-archive $(ILCDIR)/libilclient.a -Wl,--no-whole-archive
+LDLIBS  += -Wl,--whole-archive -Wl,--no-whole-archive
 LDFLAGS += -L$(VCLIBDIR)
 
 DEBUG ?= 0
@@ -107,8 +107,8 @@ INCLUDES += $(shell pkg-config --cflags freetype2)
 
 ### The object files (add further files here):
 
-ILCLIENT = $(ILCDIR)/libilclient.a
-OBJS = $(PLUGIN).o tools.o setup.o OMXAlsa.o omx.o audio.o omxdevice.o ovgosd.o display.o
+ILCOBJS = $(ILCDIR)/ilclient.o $(ILCDIR)/ilcore.o
+OBJS = $(PLUGIN).o tools.o setup.o OMXAlsa.o omx.o audio.o omxdevice.o ovgosd.o display.o $(ILCOBJS)
 
 ### The main target:
 
@@ -156,7 +156,7 @@ install-i18n: $(I18Nmsgs)
 
 ### Targets:
 
-$(SOFILE): $(ILCLIENT) $(OBJS)
+$(SOFILE): $(OBJS)
 	$(CXX) $(CXXFLAGS) $(LDFLAGS) -shared $(OBJS) $(LDLIBS) -o $@
 
 ILCOPTS = -DSTANDALONE  -DTARGET_POSIX -D_LINUX -DPIC -D_REENTRANT
@@ -165,9 +165,6 @@ $(ILCDIR)/%.o: $(ILCDIR)/%.c
 	$(CC) $(CXXFLAGS) -c $(DEFINES) $(INCLUDES) $(ILCOPTS) -o $@ $<
 $(ILCDIR)/%.o: $(ILCDIR)/%.cpp
 	$(CXX) $(CXXFLAGS) -c $(DEFINES) $(INCLUDES) $(ILCOPTS) -o $@ $<
-ILCOBJS = $(ILCDIR)/ilclient.o $(ILCDIR)/ilcore.o
-$(ILCLIENT): $(ILCOBJS)
-	$(AR) r $@ $^
 
 install-lib: $(SOFILE)
 	install -D $^ $(DESTDIR)$(LIBDIR)/$^.$(APIVERSION)
@@ -185,7 +182,7 @@ dist: $(I18Npo) clean
 clean:
 	@-rm -f $(PODIR)/*.mo $(PODIR)/*.pot
 	@-rm -f $(OBJS) $(DEPFILE) *.so *.tgz core* *~
-	@-rm -f $(ILCDIR)/*.o $(ILCLIENT)
+	@-rm -f $(ILCDIR)/*.o
 
 .PHONY:	cppcheck
 cppcheck:
