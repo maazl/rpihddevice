@@ -1267,14 +1267,14 @@ mixer_done:
 			}
 
 			pts -= (int64_t)sink->pcm_delay * OMX_TICKS_PER_SECOND / rate;
+			CDEBUG(comp, 0, "La %li, %lli, %lli", sink->pcm_delay, omx_ticks_to_s64(buf->nTimeStamp), pts);
 
 			pthread_mutex_unlock(&comp->mutex);
+			tst.nTimestamp = omx_ticks_from_s64(pts);
 			if (buf->nFlags & (OMX_BUFFERFLAG_STARTTIME|OMX_BUFFERFLAG_DISCONTINUITY))
 				OMX_SetConfig(clock_port->tunnel_comp, OMX_IndexConfigTimeClientStartTime, &tst);
-			if (pts >= sink->starttime) {
-				tst.nTimestamp = omx_ticks_from_s64(pts);
+			else
 				OMX_SetConfig(clock_port->tunnel_comp, OMX_IndexConfigTimeCurrentAudioReference, &tst);
-			}
 			pthread_mutex_lock(&comp->mutex);
 		}
 
